@@ -43,6 +43,11 @@
   <li><a href="#YP_client"      >Setting up a YP client</a>
 </ul>
 <li><a href="#Patches"          >Keeping OpenBSD up to date</a>
+<li><a href="#VMM"              >Virtual machines with VMM</a>
+<ul>
+  <li><a href="#VMM_simple"     >Ths simplest vmm(4) setup</a>
+  <li><a href="#VMM_wireless"   >Using vmm(4) when the host uses wireless networking</h3>
+</ul>
 </ul>
 
 <hr>
@@ -895,5 +900,171 @@ At other times, will require recompiling all utilities statically linked to a
 patched library.
 
 <p>
+
+<h2 id="VMM">Using virtual machines with vmm(4)</a></h2>
+
+<p>
+OpenBSD ships with a virtual machine monitor,
+<a href="http://man.openbsd.org/vmm">vmm(4)</a>, which is capable of hosting
+OpenBSD guests.
+This section shows how to set up the common use-cases.
+
+<h3 id="VMM_simple">The simplest vmm(4) setup</h3>
+
+<p>
+Suppose that we have a machine connected to the internet via a wired
+<a href="http://man.openbsd.org/vr">vr(4)</a> network interface, and that we
+wish to install an OpenBSD guest VM with internet access.
+Suppose that the wired interface gets its network address via DHCP, and that we
+want the guest machine to use that same DHCP server.
+
+<p>
+First we make a directory to hold the disk image and kernel:
+
+<pre><blockquote>
+# mkdir -p /vms/my_vm
+# cd /vms/my_vm
+</pre></blockquote>
+
+<p>
+Next we make a disk image:
+
+<pre><blockquote>
+vmctl create disk.img -s 4.5G
+</pre></blockquote>
+
+The <tt>-s</tt> argument specifies the size of the disk image.
+Note that the image is lazily allocated.
+
+<p>
+Next we need an OpenBSD kernel to boot.
+We are going to run the OpenBSD installer, so we need a <tt>bsd.rd</tt> (at
+least initially).
+For the sake of example, let's use the <tt>bsd.rd</tt> from the host:
+
+<pre><blockquote>
+# cp /bsd.rd .
+</pre></blockquote>
+
+<p>
+Now we have to tell the host machine about the configuration of the VM.
+In this FAQ we will do this using a
+<a href="http://man.openbsd.org/vm.conf"<tt>vm.conf(5)</tt></a>, so as to bring
+the VM up at boot time (but note that the VM configuration could be specified
+when starting a VM manually with
+<a href="http://man.openbsd.org/vmctl"><tt>vmctl(8)</tt></a>).
+
+<p>
+In <tt>/etc/vm.conf</tt>, put the following:
+
+
+
+<pre><blockquote>
+switch "my_switch" {
+    interface bridge0
+    add re0
+}
+
+vm "my_vm" {
+    memory 512M
+    disk "/vms/my_vm/disk.img"
+    kernel "/vms/my_vm/bsd.rd"
+    interface tap { switch "my_switch" }
+}
+</pre></blockquote>
+
+<p>
+This should be mostly self explanitory, but the switch configuration perhaps
+requires some explanation.
+When the VM starts, a
+<a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a> network interface will
+be created.
+This interface corresponds to the
+<a href="http://man.openbsd.org/vio"><tt>vio(4)</tt></a> network interface
+inside the guest.
+By defining a "switch", and assigning it to our VM, we add the host-side
+<a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a> interface to an
+(automatically created)
+<a href="http://man.openbsd.org/bridge"><tt>bridge(4)</tt></a> interface.
+By specifying <tt>add re0</tt> in the switch definition, we also add the host's
+wired interface into the bridge, thus granting internet access to the guest.
+
+<p>
+Now let's bring the guest up:
+
+<pre><blockquote>
+# rcctl enable vmd # start VMs at boot
+# rcctl start vmd
+</pre></blockquote>
+
+<p>
+If all went to plan,
+<a href="http://man.openbsd.org/rcctl"><tt>rcctl(8)</tt></a> should tell us the
+VM is up:
+
+
+<pre><blockquote>
+   ID   PID VCPUS    MAXMEM    CURMEM              TTY NAME                     
+    1 73539     1     512MB      91MB       /dev/ttyp7 my_vm                    
+</pre></blockquote>
+
+<p>
+We can connect to the guest's console using the VM's ID:
+
+<pre><blockquote>
+# vmctl console 1
+Connected to /dev/ttyp7 (speed 9600)
+</pre></blockquote>
+
+Hit enter, to see the next line of console output:
+
+<pre><blockquote>
+(i)nstall, (u)pgrade, (a)utoinstall or (s)hell?
+</pre></blockquote>
+
+It's the installer!
+You can now install the guest.
+When asked for network settings, we can specify to use DHCP, and the
+host-network's DHCP server will answer.
+Once installation is complete, we can halt the guest, and swap the ramdisk
+kernel for a normal kernel:
+
+<pre><blockquote>
+# halt -p
+syncing disks... done
+</pre></blockquote>
+
+When the guest is down, hit enter and you are back at the host's shell:
+
+<pre><blockquote>
+[EOT]
+# cp /bsd .
+# vi /etc/vm.conf # update kernel setting to: kernel "/vms/my_vm/bsd"
+</pre></blockquote>
+
+<p>
+Finally, we can restart the VM and it should boot multi-user.
+Note that the ID will have incremented.
+
+<pre><blockquote>
+# vmctl reload # XXX better way? How to start a single VM defined in vm.conf?
+# vmctl status
+   ID   PID VCPUS    MAXMEM    CURMEM              TTY NAME                     
+    2 73539     1     512MB      91MB       /dev/ttyp7 my_vm                    
+# vmctl console 2
+</pre></blockquote>
+
+Hit enter:
+
+<pre><blockquote>
+OpenBSD/amd64 (foo.dlink.com) (tty00)
+
+login: 
+</pre></blockquote>
+
+<h3 id="VMM_wireless">Using vmm(4) when the host uses wireless networking</h3>
+
+XXX
+
 </body>
 </html>
