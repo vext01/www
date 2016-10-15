@@ -913,10 +913,10 @@ This section shows how to set up the common use-cases.
 
 <p>
 Suppose that we have a machine connected to the internet via a wired
-<a href="http://man.openbsd.org/vr">vr(4)</a> network interface, and that we
-wish to install an OpenBSD guest VM with internet access.
-Suppose that the wired interface gets its network address via DHCP, and that we
-want the guest machine to use that same DHCP server.
+<tt>vr0</tt> network interface, and that we wish to install an OpenBSD guest VM
+with internet access.
+Suppose that <tt>vr0</tt> gets its network address via DHCP, and that we want
+the guest machine to use that same DHCP server.
 
 <p>
 First we make a directory to hold the disk image and kernel:
@@ -972,17 +972,18 @@ vm "my_vm" {
 </pre></blockquote>
 
 <p>
-This should be mostly self explanitory, but the switch configuration perhaps
-requires some explanation.
+This should be mostly self explanatory, but the switch configuration perhaps
+requires some more discussion.
 When the VM starts, a
 <a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a> network interface will
 be created.
 This interface corresponds to the
 <a href="http://man.openbsd.org/vio"><tt>vio(4)</tt></a> network interface
 inside the guest.
-By defining a "switch", and assigning it to our VM, we add the host-side
-<a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a> interface to an
-(automatically created)
+By defining a "switch", and assigning it to our VM,
+<a href="http://man.openbsd.org/vmd"><tt>vmd(8)</tt></a> will later add the
+host-side <a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a> interface to
+an (automatically created)
 <a href="http://man.openbsd.org/bridge"><tt>bridge(4)</tt></a> interface.
 By specifying <tt>add re0</tt> in the switch definition, we also add the host's
 wired interface into the bridge, thus granting internet access to the guest.
@@ -1006,7 +1007,12 @@ VM is up:
 </pre></blockquote>
 
 <p>
-We can connect to the guest's console using the VM's ID:
+If the guest is not listed, look in <tt>/var/log/daemon</tt> for clues as to
+what went wrong.
+
+<p>
+Assuming all is well, we can now connect to the guest's console using the VM's
+ID:
 
 <pre><blockquote>
 # vmctl console 1
@@ -1014,7 +1020,7 @@ Connected to /dev/ttyp7 (speed 9600)
 </pre></blockquote>
 
 <p>
-Hit enter, to see the next line of console output:
+Hit enter to see the next line of console output:
 
 <pre><blockquote>
 (i)nstall, (u)pgrade, (a)utoinstall or (s)hell?
@@ -1022,9 +1028,12 @@ Hit enter, to see the next line of console output:
 
 <p>
 It's the installer!
-You can now install the guest.
+We can now install the guest (the installation procedure is detailed in the
+<a href="faq4.html">installation guide</a>).
 When asked for network settings, we can specify to use DHCP, and the
 host-network's DHCP server will answer.
+
+<p>
 Once installation is complete, we can halt the guest, and swap the ramdisk
 kernel for a normal kernel:
 
@@ -1044,7 +1053,7 @@ When the guest is down, hit enter and you are back at the host's shell:
 
 <p>
 Finally, we can restart the VM and it should boot multi-user.
-Note that the ID will have incremented.
+Note that the guest's ID will have changed.
 
 <pre><blockquote>
 # vmctl reload # XXX better way? How to start a single VM defined in vm.conf?
@@ -1057,7 +1066,7 @@ Note that the ID will have incremented.
 Hit enter:
 
 <pre><blockquote>
-OpenBSD/amd64 (foo.dlink.com) (tty00)
+OpenBSD/amd64 (foo.bar) (tty00)
 
 login: 
 </pre></blockquote>
@@ -1069,28 +1078,28 @@ Unfortunately, the setup described in the previous section would not have
 worked if the host's wired <tt>vr0</tt> interface had been a wireless interface.
 Due to a limitation of the ieee802.11 standard, wireless interfaces can not
 participate in network bridges.
-To work around this, we can use a network address translation (NAT), but the
-upshot is we can no longer use the host-network's DHCP server.
+To work around this, we can give the guest VM its own network and use network
+address translation (NAT) to the host's network, but the upshot is we can no
+longer use the host network's DHCP server.
 We would need to either use static addresses, or our own DHCP server.
 Here we demonstrate the latter option.
 
 <p>
 Suppose that we have a host machine with internet access via a wireless
-<a href="http://man.openbsd.org/iwn"><tt>iwn(4)</tt></a> interface
-on the <tt>192.168.1.0/24</tt> network, and that we want to install an OpenBSD
-guest which will get an IP address via our own DHCP server on the
-<tt>192.168.10.0/24</tt> network.
-The guest will access the internet via a NAT between the two networks.
-Let's assume we are using the same kernel and disk image paths as before.
+<tt>iwn0</tt> interface on the <tt>192.168.1.0/24</tt> network, and that we
+want to install an OpenBSD guest which will get an IP address via our own DHCP
+server on the <tt>192.168.10.0/24</tt> network.
+The guest will access the internet via a NAT between the two networks and
+let's assume we are using the same kernel and disk image paths as before.
 
 <p>
 Although we could run the DHCP server directly on the VM's
 <a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a>
-interface, this is awkward, as the interface will come and go as the VM comes
-up and down.
+interface, this is awkward, as the interface will come and go as the guest VM
+comes up and down.
 Instead, we can use an always-existing
 <a href="http://man.openbsd.org/vether"<tt>vether(4)</tt></a> interface and
-serve up DHCP there, later eunsuring that this interface gets bridged to the
+serve up DHCP there, later ensuring that this interface gets bridged to the
 VM's <a href="http://man.openbsd.org/tap"</a><tt>tap(4)</tt></a> interface.
 
 <p>
