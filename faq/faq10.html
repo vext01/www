@@ -913,9 +913,9 @@ This section shows how to set up the common use-cases.
 
 <p>
 Suppose that we have a machine connected to the internet via a wired
-<tt>vr0</tt> network interface, and that we wish to install an OpenBSD guest VM
+<tt>re0</tt> network interface, and that we wish to install an OpenBSD guest VM
 with internet access.
-Suppose that <tt>vr0</tt> gets its network address via DHCP, and that we want
+Suppose that <tt>re0</tt> gets its network address via DHCP, and that we want
 the guest machine to use that same DHCP server.
 
 <p>
@@ -1075,7 +1075,7 @@ login:
 
 <p>
 Unfortunately, the setup described in the previous section would not have
-worked if the host's wired <tt>vr0</tt> interface had been a wireless interface.
+worked if the host's wired <tt>re0</tt> interface had been a wireless interface.
 Due to a limitation of the ieee802.11 standard, wireless interfaces can not
 participate in network bridges.
 To work around this, we can give the guest VM its own network and use network
