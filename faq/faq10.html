@@ -957,8 +957,6 @@ when starting a VM manually with
 <p>
 In <tt>/etc/vm.conf</tt>, put the following:
 
-
-
 <pre><blockquote>
 switch "my_switch" {
     interface bridge0
@@ -1002,7 +1000,6 @@ If all went to plan,
 <a href="http://man.openbsd.org/rcctl"><tt>rcctl(8)</tt></a> should tell us the
 VM is up:
 
-
 <pre><blockquote>
    ID   PID VCPUS    MAXMEM    CURMEM              TTY NAME                     
     1 73539     1     512MB      91MB       /dev/ttyp7 my_vm                    
@@ -1016,12 +1013,14 @@ We can connect to the guest's console using the VM's ID:
 Connected to /dev/ttyp7 (speed 9600)
 </pre></blockquote>
 
+<p>
 Hit enter, to see the next line of console output:
 
 <pre><blockquote>
 (i)nstall, (u)pgrade, (a)utoinstall or (s)hell?
 </pre></blockquote>
 
+<p>
 It's the installer!
 You can now install the guest.
 When asked for network settings, we can specify to use DHCP, and the
@@ -1034,6 +1033,7 @@ kernel for a normal kernel:
 syncing disks... done
 </pre></blockquote>
 
+<p>
 When the guest is down, hit enter and you are back at the host's shell:
 
 <pre><blockquote>
@@ -1123,6 +1123,7 @@ And start the DHCP server, being careful to serve up DHCP on only
 # rcctl start dhcpd
 </pre></blockquote>
 
+<p>
 We need to add a <a href="http://man.openbsd.org/pf"<tt>pf(4)</tt></a> rule to
 do the NATting.
 Put in the correct place in <tt>/etc/pf.conf</tt>:
@@ -1131,6 +1132,7 @@ Put in the correct place in <tt>/etc/pf.conf</tt>:
 match out on iwn0 inet from vether0:network to any nat-to (iwn0)
 </pre></blockquote>
 
+<p>
 And to finish off the NAT configuration:
 
 <pre><blockquote>
