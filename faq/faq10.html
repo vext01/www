@@ -1064,7 +1064,105 @@ login:
 
 <h3 id="VMM_wireless">Using vmm(4) when the host uses wireless networking</h3>
 
-XXX
+<p>
+Unfortunately, the setup described in the previous section would not have
+worked if the host's wired <tt>vr0</tt> interface had been a wireless interface.
+Due to a limitation of the ieee802.11 standard, wireless interfaces can not
+participate in network bridges.
+To work around this, we can use a network address translation (NAT), but the
+upshot is we can no longer use the host-network's DHCP server.
+We would need to either use static addresses, or our own DHCP server.
+Here we demonstrate the latter option.
+
+<p>
+Suppose that we have a host machine with internet access via a wireless
+<a href="http://man.openbsd.org/iwn"><tt>iwn(4)</tt></a> interface
+on the <tt>192.168.1.0/24</tt> network, and that we want to install an OpenBSD
+guest which will get an IP address via our own DHCP server on the
+<tt>192.168.10.0/24</tt> network.
+The guest will access the internet via a NAT between the two networks.
+Let's assume we are using the same kernel and disk image paths as before.
+
+<p>
+Although we could run the DHCP server directly on the VM's
+<a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a>
+interface, this is awkward, as the interface will come and go as the VM comes
+up and down.
+Instead, we can use an always-existing
+<a href="http://man.openbsd.org/vether"<tt>vether(4)</tt></a> interface and
+serve up DHCP there, later eunsuring that this interface gets bridged to the
+VM's <a href="http://man.openbsd.org/tap"</a><tt>tap(4)</tt></a> interface.
+
+<p>
+Let's make a <tt>vether0</tt> interface:
+
+<pre><blockquote>
+# echo "inet 192.168.10.1 255.255.255.0" > /etc/hostname.vether0
+# sh /etc/netstart vether0
+</pre></blockquote>
+
+<p>
+Next, put the following in <tt>/etc/dhcpd.conf</tt>:
+
+<pre><blockquote>
+subnet 192.168.10.0 netmask 255.255.255.0 {
+    option routers 192.168.10.1;
+    option domain-name-servers 192.168.1.1;
+    option domain-name "home";
+    range 192.168.10.2 192.168.10.10;
+}
+</pre></blockquote>
+
+<p>
+And start the DHCP server, being careful to serve up DHCP on only
+<tt>vether0</tt>:
+
+<pre><blockquote>
+# echo "dhcpd_flags=vether0" >> /etc/rc.conf.local
+# rcctl enable dhcpd
+# rcctl start dhcpd
+</pre></blockquote>
+
+We need to add a <a href="http://man.openbsd.org/pf"<tt>pf(4)</tt></a> rule to
+do the NATting.
+Put in the correct place in <tt>/etc/pf.conf</tt>:
+
+<pre><blockquote>
+match out on iwn0 inet from vether0:network to any nat-to (iwn0)
+</pre></blockquote>
+
+And to finish off the NAT configuration:
+
+<pre><blockquote>
+# pfctl -f /etc/pf.conf
+# echo "net.inet.ip.forwarding=1" >> /etc/sysctl.conf
+# sysctl net.inet.ip.forwarding=1
+net.inet.ip.forwarding: 0 -> 1
+</pre></blockquote>
+
+<p>
+Now the following
+<a href="http://man.openbsd.org/vm.conf"</a><tt>vm.conf(5)</tt></a>
+should work:
+
+<pre><blockquote>
+switch "my_switch" {
+    add vether0
+    interface bridge0
+}
+
+vm "my_vm" {
+    memory 512M
+    disk "/vms/my_vm/disk.img"
+    kernel "/vms/my_vm/bsd.rd"
+    interface tap { switch "my_switch" }
+}
+</pre></blockquote>
+
+<p>
+Be aware that if you move the host machine between networks, (e.g. you take
+your laptop from your home to your work) you will have to update the DHCP
+server configuration to offer up the correct DNS server and router addresses.
 
 </body>
 </html>
