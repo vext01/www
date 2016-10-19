@@ -43,11 +43,7 @@
   <li><a href="#YP_client"      >Setting up a YP client</a>
 </ul>
 <li><a href="#Patches"          >Keeping OpenBSD up to date</a>
-<li><a href="#VMM"              >Virtual machines with vmm(4)</a>
-<ul>
-  <li><a href="#VMM_simple"     >Ths simplest vmm(4) setup</a>
-  <li><a href="#VMM_wireless"   >Using vmm(4) when the host uses wireless networking</h3>
-</ul>
+<li><a href="#VMM_net"          >Networking vmm(4) guests</a>
 </ul>
 
 <hr>
@@ -901,206 +897,41 @@ patched library.
 
 <p>
 
-<h2 id="VMM">Virtual machines with vmm(4)</a></h2>
+<h2 id="VMM_net">Networking vmm(4) guests</h2>
 
 <p>
-OpenBSD ships with a virtual machine monitor,
-<a href="http://man.openbsd.org/vmm">vmm(4)</a>, which is capable of hosting
-OpenBSD guests.
-This section shows how to set up the common use-cases.
-
-<h3 id="VMM_simple">The simplest vmm(4) setup</h3>
-
-<p>
-Suppose that we have a machine connected to the internet via a wired
-<tt>re0</tt> network interface, and that we wish to install an OpenBSD guest VM
-with internet access.
-Suppose that <tt>re0</tt> gets its network address via DHCP, and that we want
-the guest machine to use that same DHCP server.
-
-<p>
-First we make a directory to hold the disk image and kernel:
-
-<pre><blockquote>
-# mkdir -p /vms/my_vm
-# cd /vms/my_vm
-</pre></blockquote>
-
-<p>
-Next we make a disk image:
-
-<pre><blockquote>
-vmctl create disk.img -s 4.5G
-</pre></blockquote>
-
-The <tt>-s</tt> argument specifies the size of the disk image.
-Note that the image is lazily allocated.
-
-<p>
-Next we need an OpenBSD kernel to boot.
-We are going to run the OpenBSD installer, so we need a <tt>bsd.rd</tt> (at
-least initially).
-For the sake of example, let's use the <tt>bsd.rd</tt> from the host:
-
-<pre><blockquote>
-# cp /bsd.rd .
-</pre></blockquote>
-
-<p>
-Now we have to tell the host machine about the configuration of the VM.
-In this FAQ we will do this using a
-<a href="http://man.openbsd.org/vm.conf"<tt>vm.conf(5)</tt></a>, so as to bring
-the VM up at boot time (but note that the VM configuration could be specified
-when starting a VM manually with
-<a href="http://man.openbsd.org/vmctl"><tt>vmctl(8)</tt></a>).
-
-<p>
-In <tt>/etc/vm.conf</tt>, put the following:
-
-<pre><blockquote>
-switch "my_switch" {
-    interface bridge0
-    add re0
-}
-
-vm "my_vm" {
-    memory 512M
-    disk "/vms/my_vm/disk.img"
-    kernel "/vms/my_vm/bsd.rd"
-    interface tap { switch "my_switch" }
-}
-</pre></blockquote>
-
-<p>
-This should be mostly self explanatory, but the switch configuration perhaps
-requires some more discussion.
-When the VM starts, a
-<a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a> network interface will
-be created.
-This interface corresponds to the
-<a href="http://man.openbsd.org/vio"><tt>vio(4)</tt></a> network interface
-inside the guest.
-By defining a "switch", and assigning it to our VM,
-<a href="http://man.openbsd.org/vmd"><tt>vmd(8)</tt></a> will later add the
-host-side <a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a> interface to
-an (automatically created)
-<a href="http://man.openbsd.org/bridge"><tt>bridge(4)</tt></a> interface.
-By specifying <tt>add re0</tt> in the switch definition, we also add the host's
-wired interface into the bridge, thus granting internet access to the guest.
-
-<p>
-Now let's bring the guest up:
-
-<pre><blockquote>
-# rcctl enable vmd # start VMs at boot
-# rcctl start vmd
-</pre></blockquote>
-
-<p>
-If all went to plan,
-<a href="http://man.openbsd.org/rcctl"><tt>rcctl(8)</tt></a> should tell us the
-VM is up:
-
-<pre><blockquote>
-   ID   PID VCPUS    MAXMEM    CURMEM              TTY NAME
-    1 73539     1     512MB      91MB       /dev/ttyp7 my_vm
-</pre></blockquote>
-
-<p>
-If the guest is not listed, look in <tt>/var/log/daemon</tt> for clues as to
-what went wrong.
-
-<p>
-Assuming all is well, we can now connect to the guest's console using the VM's
-ID:
-
-<pre><blockquote>
-# vmctl console 1
-Connected to /dev/ttyp7 (speed 9600)
-</pre></blockquote>
-
-<p>
-Hit enter to see the next line of console output:
-
-<pre><blockquote>
-(i)nstall, (u)pgrade, (a)utoinstall or (s)hell?
-</pre></blockquote>
-
-<p>
-It's the installer!
-We can now install the guest (the installation procedure is detailed in the
-<a href="faq4.html">installation guide</a>).
-When asked for network settings, we can specify to use DHCP, and the
-host-network's DHCP server will answer.
-
-<p>
-Once installation is complete, we can halt the guest, and swap the ramdisk
-kernel for a normal kernel:
-
-<pre><blockquote>
-# halt -p
-syncing disks... done
-</pre></blockquote>
-
-<p>
-When the guest is down, hit enter and you are back at the host's shell:
-
-<pre><blockquote>
-[EOT]
-# cp /bsd .
-# vi /etc/vm.conf # update kernel setting to: kernel "/vms/my_vm/bsd"
-</pre></blockquote>
-
-<p>
-Finally, we can restart the VM and it should boot multi-user.
-Note that the guest's ID will have changed.
-
-<pre><blockquote>
-# vmctl reload # XXX better way? How to start a single VM defined in vm.conf?
-# vmctl status
-   ID   PID VCPUS    MAXMEM    CURMEM              TTY NAME
-    2 73539     1     512MB      91MB       /dev/ttyp7 my_vm
-# vmctl console 2
-</pre></blockquote>
-
-Hit enter:
-
-<pre><blockquote>
-OpenBSD/amd64 (foo.bar) (tty00)
-
-login:
-</pre></blockquote>
-
-<h3 id="VMM_wireless">Using vmm(4) when the host uses wireless networking</h3>
-
-<p>
-Unfortunately, the setup described in the previous section would not have
-worked if the host's wired <tt>re0</tt> interface had been a wireless interface.
-Due to a limitation of the ieee802.11 standard, wireless interfaces can not
+Giving a <a href="http://man.openbsd.org/vmm"><tt>vmm(4)</tt></a> guest network
+access is easy if the host machine uses a wired network interface: you can then
+simply put the guest's <a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a>
+interface into a bridged virtual switch with the host's wired interface.
+Inside the guest, the <a href="http://man.openbsd.org/vio"><tt>vio(4)</tt></a>
+interface can then be configured as if it were a real machine physically
+connected to the host network.
+Unfortunately, this strategy does not work if the host machine has a wireless
+network interface.
+Due to a limitation of the IEEE 802.11 standard, wireless interfaces can not
 participate in network bridges.
-To work around this, we can give the guest VM its own network and use network
-address translation (NAT) to the host's network, but the upshot is we can no
-longer use the host network's DHCP server.
-We would need to either use static addresses, or our own DHCP server.
-Here we demonstrate the latter option.
+One way to work around this is to give the guest VM its own network and use
+network address translation (NAT) to the host's network.
 
 <p>
-Suppose that we have a host machine with internet access via a wireless
+Suppose that we have a host machine with network access via a wireless
 <tt>iwn0</tt> interface on the <tt>192.168.1.0/24</tt> network, and that we
-want to install an OpenBSD guest which will get an IP address via our own DHCP
-server on the <tt>192.168.10.0/24</tt> network.
-The guest will access the internet via a NAT between the two networks and
-let's assume we are using the same kernel and disk image paths as before.
-
-<p>
-Although we could run the DHCP server directly on the VM's
-<a href="http://man.openbsd.org/tap"><tt>tap(4)</tt></a>
-interface, this is awkward, as the interface will come and go as the guest VM
-comes up and down.
-Instead, we can use an always-existing
+want to install an OpenBSD guest onto a the <tt>192.168.10.0/24</tt> network and
+give the guest access to the host's network via a NAT.
+Assume that we configured the guest's host-side interface to be fixed as
+<tt>tap0</tt>.
+Although we could set up NAT directly between the <tt>tap0</tt> and
+<tt>iwn0</tt>, this tends to complicate matters, as <tt>tap0</tt> will appear
+and disappear as the guest is powered up and down.
+This would mean that we would have to reconfigure the address of <tt>tap0</tt>
+manually after each guest power-on.
+A more robust approach is to use an always-existing
 <a href="http://man.openbsd.org/vether"<tt>vether(4)</tt></a> interface and
-serve up DHCP there, later ensuring that this interface gets bridged to the
-VM's <a href="http://man.openbsd.org/tap"</a><tt>tap(4)</tt></a> interface.
+have <a href="http://man.openbsd.org/vmd"<tt>vmd(8)</tt></a> bridge this with
+<tt>tap0</tt> when the guest is powered on.
+Since <tt>vether0</tt> always exists regardless of whether the guest is powered
+up or not, its configuration will persist across guest power cycles.
 
 <p>
 Let's make a <tt>vether0</tt> interface:
@@ -1108,28 +939,6 @@ Let's make a <tt>vether0</tt> interface:
 <pre><blockquote>
 # echo "inet 192.168.10.1 255.255.255.0" > /etc/hostname.vether0
 # sh /etc/netstart vether0
-</pre></blockquote>
-
-<p>
-Next, put the following in <tt>/etc/dhcpd.conf</tt>:
-
-<pre><blockquote>
-subnet 192.168.10.0 netmask 255.255.255.0 {
-    option routers 192.168.10.1;
-    option domain-name-servers 192.168.1.1;
-    option domain-name "home";
-    range 192.168.10.2 192.168.10.10;
-}
-</pre></blockquote>
-
-<p>
-And start the DHCP server, being careful to serve up DHCP on only
-<tt>vether0</tt>:
-
-<pre><blockquote>
-# echo "dhcpd_flags=vether0" >> /etc/rc.conf.local
-# rcctl enable dhcpd
-# rcctl start dhcpd
 </pre></blockquote>
 
 <p>
@@ -1152,9 +961,10 @@ net.inet.ip.forwarding: 0 -> 1
 </pre></blockquote>
 
 <p>
-Now the following
-<a href="http://man.openbsd.org/vm.conf"</a><tt>vm.conf(5)</tt></a>
-should work:
+In
+<a href="http://man.openbsd.org/vm.conf"</a><tt>vm.conf(5)</tt></a>, ensure
+that you put <tt>vether0</tt> into a virtual switch alongside <tt>tap0</tt>.
+For example:
 
 <pre><blockquote>
 switch "my_switch" {
@@ -1163,17 +973,20 @@ switch "my_switch" {
 }
 
 vm "my_vm" {
-    memory 512M
-    disk "/vms/my_vm/disk.img"
-    kernel "/vms/my_vm/bsd.rd"
-    interface tap { switch "my_switch" }
+    ...
+    interface tap0 { switch "my_switch" }
 }
 </pre></blockquote>
 
 <p>
-Be aware that if you move the host machine between networks, (e.g. you take
-your laptop from your home to your work) you will have to update the DHCP
-server configuration to offer up the correct DNS server and router addresses.
+Inside the guest if we now assign <tt>vio0</tt> an address on the
+<tt>192.168.10.0/24</tt> network, and set the default route to
+<tt>192.168.10.1</tt>, we should be able to ping systems on the host network.
+For convenience, you may wish to set up a DHCP server on <tt>vether0</tt>.
+See <a href="http://man.openbsd.org/dhcpd"</a><tt>dhcpd(8)</tt></a> and
+<a href="http://man.openbsd.org/dhcpd.conf"</a><tt>dhcpd(5)</tt></a> for
+details on how to set up a DHCP server.
+
 
 </body>
 </html>
